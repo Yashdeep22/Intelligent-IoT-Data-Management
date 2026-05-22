@@ -56,6 +56,7 @@ class VolatilityShiftADDetector:
                 continue
 
             series = validate_series(series)
+            series = series.astype(float)
 
             detector = VolatilityShiftAD(
                 c=self.c,
@@ -63,15 +64,16 @@ class VolatilityShiftADDetector:
                 side=self.side
             )
 
-            anomaly_flags = detector.fit_detect(series)
-            anomaly_flags = anomaly_flags.where(anomaly_flags.notna(), False)
-            anomaly_flags = anomaly_flags.astype(bool)
+            try:
+                anomaly_flags = detector.fit_detect(series)
+                anomaly_flags = anomaly_flags.fillna(False)
+                anomaly_flags = anomaly_flags.astype(bool)
+            except Exception:
+                anomaly_flags = pd.Series(False, index=series.index)
 
             anomaly_score = series.rolling(window=self.window).std().fillna(0)
 
-            combined_flags.loc[anomaly_flags.index] = (
-                combined_flags.loc[anomaly_flags.index] | anomaly_flags
-            )
+            combined_flags = combined_flags | anomaly_flags.reindex(combined_flags.index, fill_value=False)
 
             combined_score = pd.concat(
                 [combined_score, anomaly_score],
